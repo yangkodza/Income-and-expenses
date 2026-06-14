@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบบันทึกรายรับ-รายจ่ายประจำวัน</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 500px;
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 25px;
+        }
+        .summary-box {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 25px;
+            background: #eef2f7;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .summary-item {
+            text-align: center;
+            flex: 1;
+        }
+        .summary-item span {
+            display: block;
+            font-size: 14px;
+            color: #666;
+        }
+        .summary-item strong {
+            font-size: 18px;
+        }
+        .income { color: #2ecc71; }
+        .expense { color: #e74c3c; }
+        .balance { color: #2c3e50; }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .history {
+            margin-top: 30px;
+        }
+        .history h3 {
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+            color: #444;
+        }
+        .list-group {
+            list-style: none;
+            padding: 0;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+        }
+        .list-item.inc { border-left: 5px solid #2ecc71; }
+        .list-item.exp { border-left: 5px solid #e74c3c; }
+        .btn-delete {
+            background: #ff4d4d;
+            color: white;
+            border: none;
+            padding: 3px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📝 บันทึกรายรับ-รายจ่าย</h2>
+    
+    <!-- ส่วนแสดงยอดรวม -->
+    <div class="summary-box">
+        <div class="summary-item">
+            <span>รายรับ</span>
+            <strong class="income" id="total-income">0.00</strong>
+        </div>
+        <div class="summary-item">
+            <span>รายจ่าย</span>
+            <strong class="expense" id="total-expense">0.00</strong>
+        </div>
+        <div class="summary-item">
+            <span>คงเหลือ</span>
+            <strong class="balance" id="total-balance">0.00</strong>
+        </div>
+    </div>
+
+    <!-- ฟอร์มกรอกข้อมูล -->
+    <form id="tracker-form">
+        <div class="form-group">
+            <label for="description">รายการ</label>
+            <input type="text" id="description" placeholder="เช่น ค่าข้าวเช้า, เงินเดือน" required>
+        </div>
+        <div class="form-group">
+            <label for="amount">จำนวนเงิน (บาท)</label>
+            <input type="number" id="amount" step="0.01" placeholder="0.00" required>
+        </div>
+        <div class="form-group">
+            <label for="type">ประเภท</label>
+            <select id="type">
+                <option value="income">รายรับ (+)</option>
+                <option value="expense">รายจ่าย (-)</option>
+            </select>
+        </div>
+        <button type="submit">บันทึกรายการ</button>
+    </form>
+
+    <!-- ส่วนแสดงประวัติ -->
+    <div class="history">
+        <h3>ประวัติรายการวันนี้</h3>
+        <ul id="transaction-list" class="list-group">
+            <!-- ข้อมูลจะถูกเพิ่มที่นี่ด้วย JavaScript -->
+        </ul>
+    </div>
+</div>
+
+<script>
+    // ดึงองค์ประกอบต่างๆ จาก HTML
+    const form = document.getElementById('tracker-form');
+    const descriptionInput = document.getElementById('description');
+    const amountInput = document.getElementById('amount');
+    const typeInput = document.getElementById('type');
+    const transactionList = document.getElementById('transaction-list');
+    
+    const totalIncomeText = document.getElementById('total-income');
+    const totalExpenseText = document.getElementById('total-expense');
+    const totalBalanceText = document.getElementById('total-balance');
+
+    // โหลดข้อมูลจากฐานข้อมูลเบราว์เซอร์ (LocalStorage) ถ้าไม่มีให้เป็นอาร์เรย์ว่าง
+    let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
+
+    // ฟังก์ชันอัปเดตยอดรวมและแสดงรายการ
+    function updateUI() {
+        transactionList.innerHTML = '';
+        let income = 0;
+        let expense = 0;
+
+        transactions.forEach((transaction, index) => {
+            const item = document.createElement('li');
+            const isIncome = transaction.type === 'income';
+            
+            //คำนวณยอด
+            if (isIncome) {
+                income += transaction.amount;
+            } else {
+                expense += transaction.amount;
+            }
+
+            // เพิ่มคลาสและโครงสร้างรายการ
+            item.classList.add('list-item', isIncome ? 'inc' : 'exp');
+            item.innerHTML = `
+                <div>
+                    <strong>${transaction.description}</strong> <br>
+                    <small style="color:#999;">${transaction.date}</small>
+                </div>
+                <div>
+                    <span class="${isIncome ? 'income' : 'expense'}">
+                        ${isIncome ? '+' : '-'}${transaction.amount.toFixed(2)} บ.
+                    </span>
+                    <button class="btn-delete" onclick="deleteTransaction(${index})">ลบ</button>
+                </div>
+            `;
+            transactionList.appendChild(item);
+        });
+
+        // อัปเดตตัวเลขการเงิน
+        const balance = income - expense;
+        totalIncomeText.innerText = `${income.toFixed(2)}`;
+        totalExpenseText.innerText = `${expense.toFixed(2)}`;
+        totalBalanceText.innerText = `${balance.toFixed(2)}`;
+        
+        // เปลี่ยนสีคำว่าคงเหลือถ้าติดลบ
+        totalBalanceText.style.color = balance >= 0 ? '#2c3e50' : '#e74c3c';
+    }
+
+    // ฟังก์ชันบันทึกข้อมูลลง LocalStorage
+    function updateLocalStorage() {
+        localStorage.setItem('transactions', JSON.stringify(transactions));
+    }
+
+    // ฟังก์ชันเพิ่มรายการใหม่
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const now = new Date();
+        const dateString = now.toLocaleDateString('th-TH') + ' ' + now.toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
+
+        const transaction = {
+            description: descriptionInput.value,
+            amount: parseFloat(amountInput.value),
+            type: typeInput.value,
+            date: dateString
+        };
+
+        transactions.push(transaction);
+        updateLocalStorage();
+        updateUI();
+
+        // รีเซ็ตฟอร์ม
+        descriptionInput.value = '';
+        amountInput.value = '';
+    });
+
+    // ฟังก์ชันลบรายการ
+    function deleteTransaction(index) {
+        if(confirm('คุณต้องการลบรายการนี้ใช่หรือไม่?')) {
+            transactions.splice(index, 1);
+            updateLocalStorage();
+            updateUI();
+        }
+    }
+
+    // รันระบบครั้งแรกเมื่อเปิดหน้าเว็บ
+    updateUI();
+</script>
+
+</body>
+</html>
