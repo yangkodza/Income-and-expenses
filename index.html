@@ -260,3 +260,134 @@
         transactions.forEach((transaction, index) => {
             const item = document.createElement('li');
             const isIncome = transaction.type === 'income';
+            
+            if (isIncome) {
+                income += transaction.amount;
+            } else {
+                expense += transaction.amount;
+            }
+
+            item.classList.add('list-item', isIncome ? 'inc' : 'exp');
+            item.innerHTML = `
+                <div>
+                    <strong>${transaction.description}</strong> <br>
+                    <small style="color:#94a3b8; font-size:11px;">${transaction.date}</small>
+                </div>
+                <div style="text-align: right;">
+                    <span class="${isIncome ? 'income' : 'expense'}" style="font-weight:600; margin-right:8px;">
+                        ${isIncome ? '+' : '-'}${transaction.amount.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})} บ.
+                    </span>
+                    <button class="btn-delete" onclick="deleteTransaction(${index})">ลบ</button>
+                </div>
+            `;
+            transactionList.appendChild(item);
+        });
+
+        const balance = income - expense;
+        totalIncomeText.innerText = income.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        totalExpenseText.innerText = expense.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        totalBalanceText.innerText = balance.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        
+        totalBalanceText.style.color = balance >= 0 ? '#0f172a' : '#ef4444';
+    }
+
+    function updateLocalStorage() {
+        localStorage.setItem('transactions', JSON.stringify(transactions));
+    }
+
+    // ฟังก์ชันเพิ่มรายการใหม่
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const now = new Date();
+        const dateString = now.toLocaleDateString('th-TH') + ' ' + now.toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
+
+        const transaction = {
+            description: descriptionInput.value,
+            amount: parseFloat(amountInput.value),
+            type: typeInput.value,
+            date: dateString
+        };
+
+        transactions.push(transaction);
+        updateLocalStorage();
+        updateUI();
+
+        descriptionInput.value = '';
+        amountInput.value = '';
+    });
+
+    // ฟังก์ชันลบรายการ
+    function deleteTransaction(index) {
+        if(confirm('คุณต้องการลบรายการนี้ใช่หรือไม่?')) {
+            transactions.splice(index, 1);
+            updateLocalStorage();
+            updateUI();
+        }
+    }
+
+    // ==========================================
+    // ฟังก์ชันเพิ่มเติม: Backup & Import ข้อมูล
+    // ==========================================
+
+    // 1. ฟังก์ชันส่งออกไฟล์ Backup (.json)
+    function exportBackup() {
+        if (transactions.length === 0) {
+            alert('ไม่มีข้อมูลให้สำรองในขณะนี้');
+            return;
+        }
+
+        // แปลงข้อมูลเป็นข้อความ JSON
+        const dataStr = JSON.stringify(transactions, null, 2);
+        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+        
+        // ตั้งชื่อไฟล์ตามวันที่ปัจจุบัน เช่น backup_wallet_14_6_2026.json
+        const today = new Date();
+        const exportFileDefaultName = `backup_wallet_${today.getDate()}_${today.getMonth()+1}_${today.getFullYear()}.json`;
+        
+        // สร้างปุ่มลิงก์จำลองเพื่อดาวน์โหลดไฟล์
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportFileDefaultName);
+        linkElement.click();
+    }
+
+    // 2. ฟังก์ชันนำเข้าไฟล์ Backup (.json)
+    function importBackup(event) {
+        const fileElement = event.target;
+        const file = fileElement.files[0];
+        
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const importedData = JSON.parse(e.target.result);
+                
+                // ตรวจสอบความถูกต้องของโครงสร้างไฟล์เบื้องต้น
+                if (Array.isArray(importedData)) {
+                    if (confirm('การนำเข้าข้อมูลจะเขียนทับข้อมูลเดิมที่มีอยู่ในเครื่องนี้ คุณต้องการดำเนินการต่อใช่หรือไม่?')) {
+                        transactions = importedData;
+                        updateLocalStorage();
+                        updateUI();
+                        alert('นำเข้าข้อมูลสำเร็จแล้ว!');
+                    }
+                } else {
+                    alert('ไฟล์ไม่ถูกต้อง โครงสร้างข้อมูลรายรับรายจ่ายผิดพลาด');
+                }
+            } catch (err) {
+                alert('เกิดข้อผิดพลาดในการอ่านไฟล์ กรุณาใช้ไฟล์ .json ที่ดาวน์โหลดมาจากระบบนี้เท่านั้น');
+            }
+            // รีเซ็ตค่าอินพุตเพื่อให้กดเลือกไฟล์เดิมซ้ำได้ถ้าต้องการ
+            fileElement.value = '';
+        };
+        
+        reader.readAsText(file);
+    }
+
+    // รันครั้งแรกเมื่อเปิดหน้าเว็บ
+    updateUI();
+</script>
+
+</body>
+</html>
